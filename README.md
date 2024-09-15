@@ -21,6 +21,10 @@ This should be enough for the Indigo to get past the POST stage.  By removing as
  * 4 SIMMs installed (any size) into bank A
  * nothing connected except power
 
+## R4000 CPU board
+Image for reference, with only Bank A populated with SIMMs
+![R4k CPU board](pictures/CPU_Board.jpeg)
+
 # Steps
 
 In rough order (IMO)
@@ -31,7 +35,7 @@ These machines are old and likely have been through multiple owners / configurat
  * Check all connectors and sockets for bent / missing / corroded pins
  * Check for damaged / scorched / missing components and replace if possible
   * One report of expired cap on ZB4 board <link>
-  * I had a missing C502 on the underside of my R4400 CPU module <what value to replace with?>
+  * I had a missing C502 on the underside of my R4400 CPU module <what value to replace with?> ![C502](pictures/C502.jpeg)
  * Damaged traces - especially around the battery area.  This is soldered to the main board and may have already been replaced (maybe more than once)
  * dry solder joints - look for cracking around connector solder joints
   * consider reflowing connections if they look suspect
@@ -77,7 +81,10 @@ There are multiple non-volatile chips which may be involved here.
 
 ### Backplane 8 pin EEPROM
 
-<link to image> <chip number>
+![Backplane](pictures/Backplane.jpeg)
+
+2kbit EEPROM
+93CS56N https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/1033/FM93CS56.pdf
 Stores the MAC address (anything else?)
  * check that it can be read from and written to using an EEPROM programmer.
  * The machine should write to a blank chip on boot
@@ -85,16 +92,24 @@ Stores the MAC address (anything else?)
 ### CPU module 8 pin EEPROM
 
 <link to image> <chip number>
+
 Stores the CPU clock multiplier
  * check that it can be read from and written to (make a backup first and write this back to the chip when done) 
 
 ### PROM EPROM
 
+#### R4000
+
+#### R4400
 This stores the boot machine code.  There are several revisions for the R4k Indigo which add support for newer CPUs and more memory.
 <SGI part number to revision table>
+SGI num: 9319 070-8116-005
+4 Mbit EPROM 16bit words
+TC574096D-120 https://www.jameco.com/Jameco/Products/ProdDS/2344607.pdf
  * check that the version you have is compatible with the CPU you are using (e.g. R4400 support was not in earlier revisions <validate>)
   * there should be a label on the top with the SGI part number
  * check that it can be read using an EPROM programmer.  The system would never write to it.
+![PROM](pictures/PROM.jpeg)
 
 <process for upgrading / reflashing>
 
