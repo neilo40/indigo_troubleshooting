@@ -91,6 +91,9 @@ Stores the MAC address (anything else?)
 
 ### CPU module 8 pin EEPROM
 
+#### R4000
+
+#### R4400
 <link to image> <chip number>
 
 Stores the CPU clock multiplier
@@ -98,9 +101,6 @@ Stores the CPU clock multiplier
 
 ### PROM EPROM
 
-#### R4000
-
-#### R4400
 This stores the boot machine code.  There are several revisions for the R4k Indigo which add support for newer CPUs and more memory.
 <SGI part number to revision table>
 SGI num: 9319 070-8116-005
