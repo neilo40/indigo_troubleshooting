@@ -1,6 +1,6 @@
 # SGI Iris Indigo R4k (IP20) Troubleshooting
 
-Troubleshooting the case where the indigo will immediately show a green status light and will progress no further.  There will be nothing on the serial console, nothing on the video display, and no startup chime. Some SCSI disks may show signs of life by spinning up, but this is likely just because they are powered on.
+This documents my efforts in troubleshooting the case where my indigo R4k will immediately show a green status light and will progress no further.  There is nothing on the serial console, nothing on the video display, and no startup chime. Some SCSI disks may show signs of life by spinning up, but this is likely just because they are powered on.
 
 The boot process is as follows:
  * LED is green on power up
@@ -9,7 +9,12 @@ The boot process is as follows:
 
 If the LED stays green then something is preventing the CPU from executing. Unfortunately there could be a range of reasons for this
 
-<link to specs, manuals etc>
+I have two CPU modules, one R4000 which is known bad.  And one R4400 module which was working prior to an extended period of storage
+
+# References
+ 
+These resources may prove useful.  Copies of pdfs can be found in the docs folder
+ * [R4000 User Guide](https://www.eecg.toronto.edu/~moshovos/ACA/R4000.pdf)
 
 # Minimal configuration
 
@@ -35,7 +40,8 @@ These machines are old and likely have been through multiple owners / configurat
  * Check all connectors and sockets for bent / missing / corroded pins
  * Check for damaged / scorched / missing components and replace if possible
   * One report of expired cap on ZB4 board <link>
-  * I had a missing C502 on the underside of my R4400 CPU module <what value to replace with?> ![C502](pictures/C502.jpeg)
+  * I had a missing C502 on the underside of my R4400 CPU module.  I replaced this with a 0.1uF ceramic cap, but it didn't help ![C502](pictures/C502.jpeg)
+  * I also had a R4000 CPU module with missing L2 and L5 inductors and damage to the traces.  Seemingly happening after sitting in storage for some time.
  * Damaged traces - especially around the battery area.  This is soldered to the main board and may have already been replaced (maybe more than once)
  * dry solder joints - look for cracking around connector solder joints
   * consider reflowing connections if they look suspect
@@ -69,6 +75,7 @@ This is quite tricky to do given the enclosed nature of the machine.
 Tantalum capacitors are Yellow, square(ish), and have a red/orange stripe on one end.  When these fail, they cause a short
  * check resistance across each cap and anything below 10 ohm should be treated as suspect
  * remove any suspect caps from the board and check continuity in isolation
+  * I had potential bad caps at C41, C40 (31 Ohm in circuit), C513A/B, C578A/B, C645A/B (all 19 Ohm in circuit).  Unlikely <remove and test isolated>
  * replace as needed
 
 ## Memory 
@@ -77,7 +84,11 @@ Tantalum capacitors are Yellow, square(ish), and have a red/orange stripe on one
 
 ## (E)EPROMs
 
-There are multiple non-volatile chips which may be involved here.
+There are multiple non-volatile chips which may be involved here.  They can be dumped using a minipro / TL866 device[^1].  I have captured the contents of the chips from my machine.  They can be found in the roms folder.
+
+minipro can be found [here](https://gitlab.com/DavidGriffith/minipro/)
+
+To dump the rom to file: `minipro --device NM93CS56 -r r4000_cpu_module.hex`
 
 ### Backplane 8 pin EEPROM
 
@@ -93,9 +104,30 @@ Stores the MAC address (anything else?)
 
 #### R4000
 
-#### R4400
-<link to image> <chip number>
+![R4000](pictures/r4000.jpeg)
 
+93CS56N - this is the same 2kbit EEPROM as found in the backplane
+
+![R4000 eeprom](pictures/r4000_eeprom.jpeg)
+
+I dumped the rom [here](roms/r4000_cpu_module.hex)
+
+On my machine, only the first 7 bytes are non-zero: `0C 1E 4A 01 20 A2 B4`
+
+This can be decoded using the R4000 User guide[^2].  Only the first 8 bytes are expected to contain anything.  These bits are read in serially to the CPU at initialization time.
+
+This module has some very obvious physical damage.  L2 and L5 are completely missing.  I have no idea what values these should be and can't find any documentation / schematics.
+
+![R4000 Damage](pictures/r4000_dmg.jpeg)
+
+#### R4400
+
+![R4400](pictures/r4400.jpeg)
+
+93CS56N - this is the same 2kbit EEPROM as found in the backplane
+
+
+SGI part? 9113-001 02C3 (found on sticker on top of EEPROM)
 Stores the CPU clock multiplier
  * check that it can be read from and written to (make a backup first and write this back to the chip when done) 
 
@@ -125,3 +157,6 @@ This is usually one of the first steps when diagnosing simpler systems, but acce
 
  * <pinout of connector>
  * Probe to see if reset is being de-asserted and that we have a clock <is clock generated on module, or main board?> 
+
+[^1]: The minipro software can be downloaded from [https://gitlab.com/DavidGriffith/minipro/](https://gitlab.com/DavidGriffith/minipro/)
+[^2]: [R4000 User Guide](https://www.eecg.toronto.edu/~moshovos/ACA/R4000.pdf) or [local copy](docs/R4000.pdf).  Section 9.4 page 222
