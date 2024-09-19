@@ -15,6 +15,13 @@ I have two CPU modules, one R4000 which is known bad.  And one R4400 module whic
  
 These resources may prove useful.  Copies of pdfs can be found in the docs folder
  * [R4000 User Guide](https://www.eecg.toronto.edu/~moshovos/ACA/R4000.pdf)
+ * [Ian's SGI Depot](http://www.sgidepot.co.uk/sgidepot/)
+ * [Sgistuff](http://www.sgistuff.net/index.html)
+ * [IRIXnet forums](https://forums.irixnet.org)
+ * [Vintage Computer Federation forums](https://forum.vcfed.org)
+ * [Silicon Graphics User Group forums](https://forums.sgi.sh)
+ * [The Nekonomicon](https://gainos.org/~elf/sgi/nekonomicon/index.html)
+ * [Indigo Field Service Handbook](https://bukosek.si/hardware/collection/sgi-indigo/indigo-service-manual.pdf)
 
 # Minimal configuration
 
@@ -32,8 +39,6 @@ Image for reference, with only Bank A populated with SIMMs
 
 # Steps
 
-In rough order (IMO)
-
 ## Physical inspection
 
 These machines are old and likely have been through multiple owners / configurations.  Check for signs of physical trauma.  Magnifiers / loupe / optical scope will come in handy
@@ -50,7 +55,7 @@ These machines are old and likely have been through multiple owners / configurat
 
 There has been at least one report of a "dead" indigo due to battery issues.  <link>
  * remove battery if installed and try to boot
- * check voltage and replace if low.  Reports that lithium cells (2.5v) work <link>.  Or replace with Tadiran (3.6v)
+ * check voltage and replace if low.  Reports that lithium cells (2.5v) work <link>.  Or replace with a new Tadiran (3.6v)
  * re-install and try to boot
 
 ## Physical connections
@@ -67,9 +72,11 @@ Deoxit on all sockets / connectors may be a good idea
  
 ## PSU voltage levels
 
-This is quite tricky to do given the enclosed nature of the machine.
- * drive sled connectors have all voltages?
- * backplane connector (pinout?)
+This is quite tricky to do given the enclosed nature of the machine. But the Field Service Handbook[^4] suggests to use the drive sled power connectors.
+
+With pin 1 at the bottom right hand side as we look at it, 12v is pin 1, 5v is pin2 and GND are pins 6 and 7 (top right hand side).  See the diagram in the linked pdf.
+
+Load is important.  My 12v was reading 2.7v with no CPU main board installed.  5v was reading exactly 5v.  With the main and video boards installed to provide some load, the 12v rail was reading 12.2v
 
 ## Tantalum Capacitors
 Tantalum capacitors are Yellow, square(ish), and have a red/orange stripe on one end.  When these fail, they cause a short
@@ -86,8 +93,6 @@ Tantalum capacitors are Yellow, square(ish), and have a red/orange stripe on one
 
 There are multiple non-volatile chips which may be involved here.  They can be dumped using a minipro / TL866 device[^1].  I have captured the contents of the chips from my machine.  They can be found in the roms folder.
 
-minipro can be found [here](https://gitlab.com/DavidGriffith/minipro/)
-
 To dump the rom to file: `minipro --device NM93CS56 -r r4000_cpu_module.hex`
 
 ### Backplane 8 pin EEPROM
@@ -99,6 +104,8 @@ To dump the rom to file: `minipro --device NM93CS56 -r r4000_cpu_module.hex`
 Stores the MAC address (anything else?)
  * check that it can be read from and written to using an EEPROM programmer.
  * The machine should write to a blank chip on boot
+
+Using `minipro --device NM93CS56 -E` to erase the device (after dumping the content), it was filled with 256 bytes of 0xFF (<should be all 0x00?>).  When inserted back into the system it made no difference.
 
 ### CPU module 8 pin EEPROM
 
@@ -112,9 +119,9 @@ Stores the MAC address (anything else?)
 
 I dumped the rom [here](roms/r4000_cpu_module.hex)
 
-On my machine, only the first 7 bytes are non-zero: `0C 1E 4A 01 20 A2 B4`
+Only the first 8 bytes are expected to contain anything, on my machine it looks like this: `0C 1E 4A 01 20 A2 B4 00`.  The rest are all zero.
 
-This can be decoded using the R4000 User guide[^2].  Only the first 8 bytes are expected to contain anything.  These bits are read in serially to the CPU at initialization time.
+This can be decoded using the R4000 User guide[^2].  These bits are read in serially to the CPU at initialization time.
 
 This module has some very obvious physical damage.  L2 and L5 are completely missing.  I have no idea what values these should be and can't find any documentation / schematics.
 
@@ -126,16 +133,20 @@ This module has some very obvious physical damage.  L2 and L5 are completely mis
 
 93CS56N - this is the same 2kbit EEPROM as found in the backplane
 
+![R4400 eeprom](pictures/r4400_eeprom.jpeg)
 
 SGI part? 9113-001 02C3 (found on sticker on top of EEPROM)
 Stores the CPU clock multiplier
  * check that it can be read from and written to (make a backup first and write this back to the chip when done) 
 
+I dumped the rom [here](roms/r4400_cpu_module.hex)
+
+content is: `0C 0E CA 21 A0 6A B4 00`.  The rest are all zero.
+
 ### PROM EPROM
 
 This stores the boot machine code.  There are several revisions for the R4k Indigo which add support for newer CPUs and more memory.
-<SGI part number to revision table>
-SGI num: 9319 070-8116-005
+SGI num: 9319 070-8116-005 which corresponds to SGI Version 4.0.5G Rev B IP20, Nov 10, 1992 (BE)[^3]
 4 Mbit EPROM 16bit words
 TC574096D-120 https://www.jameco.com/Jameco/Products/ProdDS/2344607.pdf
  * check that the version you have is compatible with the CPU you are using (e.g. R4400 support was not in earlier revisions <validate>)
@@ -143,7 +154,13 @@ TC574096D-120 https://www.jameco.com/Jameco/Products/ProdDS/2344607.pdf
  * check that it can be read using an EPROM programmer.  The system would never write to it.
 ![PROM](pictures/PROM.jpeg)
 
-<process for upgrading / reflashing>
+Minipro does not have support for this specific device, but it is compatible with the M27C4002
+
+It can be dumped with `minipro -y --device M27C4002@DIP40 -r prom.hex`
+
+The dump from my machine is [here](roms/prom_070-8116-005.hex)
+A dump founf on the internet (I forget where!) is [here](roms/ip20prom.070-8116-005.BE.bin).  
+The files differ <where/why?>
 
 ### Probing PROM signals for activity
 
@@ -153,10 +170,32 @@ This is usually one of the first steps when diagnosing simpler systems, but acce
 
 <ROM pinout>
 
-### Probing CPU card for clock, reset, etc
+### Probing CPU module for clock, reset, etc
 
- * <pinout of connector>
- * Probe to see if reset is being de-asserted and that we have a clock <is clock generated on module, or main board?> 
+ As one of the first things the CPU does is read the config from the 8 bit EEPROM it makes sense to see if there is any activity there.
+ The EEPROM pins are somewhat accessible by soldering wires to the underside of the CPU module.  
+ We are most interested in:
+  * CS pin 1
+  * DO pin 4
+  * GND pin 5
+  * Vcc pin 8
+
+Using the scope, Vcc was measured at 4.48v which seems low but may be ok.  I didn't try it with the DMM
+On power-on or reset, CS goes high to 5.12v for slightly under 200ms then stays low
+Probing DO caused the LED to go amber (POST begins) and the chime to sound.  The LED does not go green at this stage.  Extra capcitance due to probe?
+Removing the probe causes the green LED to stay on, but reset switch now sets the LED to amber.
+
+Unfortunately picking this up the following day, I was not able to get the chime again.
+
+I captured these waveforms showing the full CS (blue) enabled section with plenty of activity on DO (yellow)
+
+![full waveform](pictures/CPU_config_full_waveform.png)
+
+Zooming in on the first burst we can make out the data.  This could be compared with the contents of the ROM.  I didn't have the clock available so I may come back to this
+
+![first burst](pictures/CPU_config_burst1_waveform.png)
 
 [^1]: The minipro software can be downloaded from [https://gitlab.com/DavidGriffith/minipro/](https://gitlab.com/DavidGriffith/minipro/)
 [^2]: [R4000 User Guide](https://www.eecg.toronto.edu/~moshovos/ACA/R4000.pdf) or [local copy](docs/R4000.pdf).  Section 9.4 page 222
+[^3]: PROM details can be found at [https://wiki.preterhuman.net/PROM](https://wiki.preterhuman.net/PROM)
+[^4]: page 3-23 of [Indigo Field Service Handbook](https://bukosek.si/hardware/collection/sgi-indigo/indigo-service-manual.pdf) or [local copy](docs/indigo-service-manual.pdf)
