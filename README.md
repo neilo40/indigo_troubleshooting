@@ -4,7 +4,7 @@ This documents my efforts in troubleshooting the case where my indigo R4k will i
 
 The boot process is as follows:
  * LED is green on power up
- * CPU starts POST and sets LED to amber and chimes <validate>
+ * CPU starts POST and sets LED to amber and chimes
  * once POST is complete, CPU sets LED back to green and boot commences
 
 If the LED stays green then something is preventing the CPU from executing. Unfortunately there could be a range of reasons for this
@@ -13,7 +13,7 @@ I have two CPU modules, one R4000 which is known bad.  And one R4400 module whic
 
 # References
  
-These resources may prove useful.  Copies of pdfs can be found in the docs folder
+These resources may prove useful.  Copies of various pdfs can be found in the docs folder
  * [R4000 User Guide](https://www.eecg.toronto.edu/~moshovos/ACA/R4000.pdf)
  * [Ian's SGI Depot](http://www.sgidepot.co.uk/sgidepot/)
  * [Sgistuff](http://www.sgistuff.net/index.html)
@@ -22,6 +22,7 @@ These resources may prove useful.  Copies of pdfs can be found in the docs folde
  * [Silicon Graphics User Group forums](https://forums.sgi.sh)
  * [The Nekonomicon](https://gainos.org/~elf/sgi/nekonomicon/index.html)
  * [Indigo Field Service Handbook](https://bukosek.si/hardware/collection/sgi-indigo/indigo-service-manual.pdf)
+ * [Andrej Bukosek's SGI collection](https://bukosek.si/hardware/collection.html)
 
 # Minimal configuration
 
@@ -82,12 +83,12 @@ Load is important.  My 12v was reading 2.7v with no CPU main board installed.  5
 Tantalum capacitors are Yellow, square(ish), and have a red/orange stripe on one end.  When these fail, they cause a short
  * check resistance across each cap and anything below 10 ohm should be treated as suspect
  * remove any suspect caps from the board and check continuity in isolation
-  * I had potential bad caps at C41, C40 (31 Ohm in circuit), C513A/B, C578A/B, C645A/B (all 19 Ohm in circuit).  Unlikely <remove and test isolated>
+  * I had potential bad caps at C41, C40 (31 Ohm in circuit), C513A/B, C578A/B, C645A/B (all 19 Ohm in circuit).  This is unlikely and probably caused by the circuit they are part of.  I may remove and test in isolation
  * replace as needed
 
 ## Memory 
 
- * Try alternate SIMM sets in bank A.  You may have a bad module
+ * Try alternate SIMM sets in bank A.  There may be a bad module
 
 ## (E)EPROMs
 
@@ -99,8 +100,7 @@ To dump the rom to file: `minipro --device NM93CS56 -r r4000_cpu_module.hex`
 
 ![Backplane](pictures/Backplane.jpeg)
 
-2kbit EEPROM
-93CS56N https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/1033/FM93CS56.pdf
+2kbit EEPROM, part number 93CS56N[^5] 
 Stores the MAC address (anything else?)
  * check that it can be read from and written to using an EEPROM programmer.
  * The machine should write to a blank chip on boot
@@ -136,7 +136,7 @@ This module has some very obvious physical damage.  L2 and L5 are completely mis
 ![R4400 eeprom](pictures/r4400_eeprom.jpeg)
 
 SGI part? 9113-001 02C3 (found on sticker on top of EEPROM)
-Stores the CPU clock multiplier
+Stores the CPU clock multiplier and other config
  * check that it can be read from and written to (make a backup first and write this back to the chip when done) 
 
 I dumped the rom [here](roms/r4400_cpu_module.hex)
@@ -147,8 +147,8 @@ content is: `0C 0E CA 21 A0 6A B4 00`.  The rest are all zero.
 
 This stores the boot machine code.  There are several revisions for the R4k Indigo which add support for newer CPUs and more memory.
 SGI num: 9319 070-8116-005 which corresponds to SGI Version 4.0.5G Rev B IP20, Nov 10, 1992 (BE)[^3]
-4 Mbit EPROM 16bit words
-TC574096D-120 https://www.jameco.com/Jameco/Products/ProdDS/2344607.pdf
+4 Mbit EPROM 16bit words[^7]
+
  * check that the version you have is compatible with the CPU you are using (e.g. R4400 support was not in earlier revisions <validate>)
   * there should be a label on the top with the SGI part number
  * check that it can be read using an EPROM programmer.  The system would never write to it.
@@ -159,28 +159,35 @@ Minipro does not have support for this specific device, but it is compatible wit
 It can be dumped with `minipro -y --device M27C4002@DIP40 -r prom.hex`
 
 The dump from my machine is [here](roms/prom_070-8116-005.hex)
-A dump founf on the internet (I forget where!) is [here](roms/ip20prom.070-8116-005.BE.bin).  
+A dump found on the internet (I forget where!) is [here](roms/ip20prom.070-8116-005.BE.bin).  
 The files differ <where/why?>
 
-### Probing PROM signals for activity
+### Digging deeper into the boot process
 
-This is usually one of the first steps when diagnosing simpler systems, but access to the PROM is impossible when the board is installed in the chassis
- * solder some test leads to the back of the board and hook them up to the scope / analyzer
- * looking for activity on the enable, CS, address lines to indicate that the CPU is somewhat alive
+This is the power on sequence[^6]
 
-<ROM pinout>
+ 1. Power is applied.  After at least 4.75v is detected for 100ms, VCCOk is asserted
+ 2. Reset* and ColdReset* are asserted (active low)
+ 3. CPU config is loaded from serial EEPROM (256 bits)
+ 4. Reset* and ColdReset* are deasserted
+ 5. CPU loads instructions from the PROM
 
-### Probing CPU module for clock, reset, etc
+### Probing CPU module for mode config, clocks, reset, etc
 
  As one of the first things the CPU does is read the config from the 8 bit EEPROM it makes sense to see if there is any activity there.
  The EEPROM pins are somewhat accessible by soldering wires to the underside of the CPU module.  
- We are most interested in:
-  * CS pin 1
-  * DO pin 4
-  * GND pin 5
-  * Vcc pin 8
+ 
+ |Name|EEPROM Pin Number|CPU Pin  |
+ |----|-----------------|---------|
+ |CS  |1                |         |
+ |SK  |2                |ModeClock|
+ |DO  |4                |ModeIn   |
+ |GND |5                |         |
+ |Vcc |8                |         |
 
-Using the scope, Vcc was measured at 4.48v which seems low but may be ok.  I didn't try it with the DMM
+ **Table 1:** Selected EEPROM pinout
+
+Using the scope, Vcc was measured at 4.48v which seems low but may be ok.  I didn't try it with the DMM.  The docs indicate that there must be a stable 4.75v for VCCOk to assert
 On power-on or reset, CS goes high to 5.12v for slightly under 200ms then stays low
 Probing DO caused the LED to go amber (POST begins) and the chime to sound.  The LED does not go green at this stage.  Extra capcitance due to probe?
 Removing the probe causes the green LED to stay on, but reset switch now sets the LED to amber.
@@ -195,7 +202,39 @@ Zooming in on the first burst we can make out the data.  This could be compared 
 
 ![first burst](pictures/CPU_config_burst1_waveform.png)
 
+Need to check for Reset* and ColdReset* deassertion but I'm not able to find a pinout for the R4400.  According to the R4000 user guide (appendix G.2), the 447pin package for the R4000 lists the following pins.  Perhaps the 447 pin R4400 is the same.  We can use ModeClock, ModeIn to compare
+
+| Signal | R4000 pin |
+|--------|-----------|
+|ColdReset* | AW37   |
+|Reset* | AU39  |
+|ModeIn | AV8|
+|ModeClock|B8|
+
+### Probing PROM signals for activity
+
+This is usually one of the first steps when diagnosing simpler systems, but access to the PROM is difficult when the board is installed in the chassis
+
+If we can determine that the CPU has initialized correctly, then the next step is to probe for activity on the PROM
+
+ * we can solder some test leads to the back of the board and hook them up to the scope / analyzer
+ * looking for activity on the enable, CS, address lines to indicate that the CPU is somewhat alive
+
+ |Name|EEPROM Pin Number|
+ |----|-----------------|
+ |CE* |2 (active low)   |
+ |D0  |19               |
+ |OE* |20 (active low)  |
+ |A0  |21               |
+ |GND |11,30            |
+ |VDD |40               |
+ 
+ **Table 2:** Selected PROM pinout
+
 [^1]: The minipro software can be downloaded from [https://gitlab.com/DavidGriffith/minipro/](https://gitlab.com/DavidGriffith/minipro/)
 [^2]: [R4000 User Guide](https://www.eecg.toronto.edu/~moshovos/ACA/R4000.pdf) or [local copy](docs/R4000.pdf).  Section 9.4 page 222
 [^3]: PROM details can be found at [https://wiki.preterhuman.net/PROM](https://wiki.preterhuman.net/PROM)
 [^4]: page 3-23 of [Indigo Field Service Handbook](https://bukosek.si/hardware/collection/sgi-indigo/indigo-service-manual.pdf) or [local copy](docs/indigo-service-manual.pdf)
+[^5]: [FM93CS56.pdf](https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/1033/FM93CS56.pdf) or [local_copy](docs/FM93CS56.pdf)
+[^6]: [R4000 User Guide](https://www.eecg.toronto.edu/~moshovos/ACA/R4000.pdf) or [local copy](docs/R4000.pdf).  Section 9.2 page 216
+[^7]: [TC574096D-120](https://www.jameco.com/Jameco/Products/ProdDS/2344607.pdf) or [local copy](docs/2344607.pdf)
