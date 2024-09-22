@@ -141,7 +141,7 @@ Stores the CPU clock multiplier and other config
 
 I dumped the rom [here](roms/r4400_cpu_module.hex)
 
-content starts with these 8 bytes: `0C 0E CA 21 A0 6A B4 00`.  The rest are all zero apart from two bytes of FF FF at addresses AE and AF.
+content starts with these 8 bytes: `0C 0E CA 21 A0 6A B4 00`.  The rest are all zero apart from two bytes of `FF FF` at addresses 0xAE and 0xAF.
 
 ### PROM EPROM
 
@@ -149,7 +149,7 @@ This stores the boot machine code.  There are several revisions for the R4k Indi
 SGI num: 9319 070-8116-005 which corresponds to SGI Version 4.0.5G Rev B IP20, Nov 10, 1992 (BE)[^3]
 4 Mbit EPROM 16bit words[^7]
 
- * check that the version you have is compatible with the CPU you are using (e.g. R4400 support was not in earlier revisions <validate>)
+ * check that the version you have is compatible with the CPU you are using (e.g. I think R4400 support was not in earlier revisions)
   * there should be a label on the top with the SGI part number
  * check that it can be read using an EPROM programmer.
 
@@ -171,7 +171,7 @@ This is the power on sequence for the CPU itself[^6]
  2. Reset* and ColdReset* are asserted (active low)
  3. CPU config is loaded from serial EEPROM (256 bits)
  4. Reset* and ColdReset* are deasserted
- 5. CPU loads instructions from the PROM
+ 5. CPU loads instructions from the PROM and the machine boots
 
 ### Probing CPU module for mode config, clocks, reset, etc
 
@@ -188,18 +188,20 @@ This is the power on sequence for the CPU itself[^6]
 
  **Table 1:** Selected EEPROM pinout
 
-Using the scope, Vcc was measured at 4.48v which seems low but may be ok.  I didn't try it with the DMM.  The docs indicate that there must be a stable 4.75v for VCCOk to assert
-On power-on or reset, CS goes high to 5.12v for slightly under 200ms then stays low
-Probing DO caused the LED to go amber (POST begins) and the chime to sound.  The LED does not go green at this stage.  Extra capcitance due to probe?
+Using the scope, Vcc was measured at 4.48v which seems low but may be ok.  I didn't try it with the DMM.  The docs indicate that there must be a stable 4.75v for VCCOk to assert.
+
+On power-on or reset, CS goes high to 5.12v for slightly under 200ms then stays low.
+
+Probing DO caused the LED to go amber (POST begins) and the chime to sound.  The LED does not go green at this stage.  Extra capcitance due to probe? bad joint? luck?
 Removing the probe causes the green LED to stay on, but reset switch now sets the LED to amber.
 
 Unfortunately picking this up the following day, I was not able to get the chime again.
 
-I captured these waveforms showing the full CS (blue) enabled section with plenty of activity on DO (yellow) and SK (purple)
+I captured these waveforms showing the full CS (yellow) enabled section with plenty of activity on DO (blue) and SK (purple)
 
 ![full waveform](pictures/CPU_config_full_with_clock.png)
 
-Checking ModeClock (SK), it should be MasterClock / 256.  I measured SK as being 292KHz which is exactly what we would expect with a MasterClock at 75MHz for 150MHz R4400
+Checking ModeClock (SK), it's frequency should be MasterClock's / 256.  I measured SK as being 292KHz which is exactly what we would expect with a MasterClock at 75MHz for 150MHz R4400
 
 ![SK freq](pictures/CPU_config_sk_period.png)
 
@@ -224,6 +226,8 @@ Ultimately, we need to check for Reset* and ColdReset* deassertion but I'm not a
 |ModeIn | AV8|
 |ModeClock|B8|
 
+**Table 2:** Selected R4000 pinout
+
 ### Probing PROM signals for activity
 
 This is usually one of the first steps when diagnosing simpler systems, but access to the PROM is difficult when the board is installed in the chassis
@@ -242,7 +246,7 @@ If we can determine that the CPU has initialized correctly, then the next step i
  |GND |11,30            |
  |VDD |40               |
  
- **Table 2:** Selected PROM pinout
+ **Table 3:** Selected PROM pinout
 
 [^1]: The minipro software can be downloaded from [https://gitlab.com/DavidGriffith/minipro/](https://gitlab.com/DavidGriffith/minipro/)
 [^2]: [R4000 User Guide](https://www.eecg.toronto.edu/~moshovos/ACA/R4000.pdf) or [local copy](docs/R4000.pdf).  Section 9.4 page 222
