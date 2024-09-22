@@ -46,7 +46,7 @@ These machines are old and likely have been through multiple owners / configurat
  * Check all connectors and sockets for bent / missing / corroded pins
  * Check for damaged / scorched / missing components and replace if possible
   * One report of expired cap on ZB4 board <link>
-  * I had a missing C502 on the underside of my R4400 CPU module.  I replaced this with a 0.1uF ceramic cap, but it didn't help ![C502](pictures/C502.jpeg)
+  * I had a missing C502 on the underside of my R4400 CPU module.  I replaced this with a 0.1uF and a 10uF ceramic cap, but neither helped ![C502](pictures/C502.jpeg)
   * I also had a R4000 CPU module with missing L2 and L5 inductors and damage to the traces.  Seemingly happening after sitting in storage for some time.
  * Damaged traces - especially around the battery area.  This is soldered to the main board and may have already been replaced (maybe more than once)
  * dry solder joints - look for cracking around connector solder joints
@@ -141,7 +141,7 @@ Stores the CPU clock multiplier and other config
 
 I dumped the rom [here](roms/r4400_cpu_module.hex)
 
-content is: `0C 0E CA 21 A0 6A B4 00`.  The rest are all zero.
+content starts with these 8 bytes: `0C 0E CA 21 A0 6A B4 00`.  The rest are all zero apart from two bytes of FF FF at addresses AE and AF.
 
 ### PROM EPROM
 
@@ -151,7 +151,8 @@ SGI num: 9319 070-8116-005 which corresponds to SGI Version 4.0.5G Rev B IP20, N
 
  * check that the version you have is compatible with the CPU you are using (e.g. R4400 support was not in earlier revisions <validate>)
   * there should be a label on the top with the SGI part number
- * check that it can be read using an EPROM programmer.  The system would never write to it.
+ * check that it can be read using an EPROM programmer.
+
 ![PROM](pictures/PROM.jpeg)
 
 Minipro does not have support for this specific device, but it is compatible with the M27C4002
@@ -164,7 +165,7 @@ The files differ <where/why?>
 
 ### Digging deeper into the boot process
 
-This is the power on sequence[^6]
+This is the power on sequence for the CPU itself[^6]
 
  1. Power is applied.  After at least 4.75v is detected for 100ms, VCCOk is asserted
  2. Reset* and ColdReset* are asserted (active low)
@@ -194,15 +195,27 @@ Removing the probe causes the green LED to stay on, but reset switch now sets th
 
 Unfortunately picking this up the following day, I was not able to get the chime again.
 
-I captured these waveforms showing the full CS (blue) enabled section with plenty of activity on DO (yellow)
+I captured these waveforms showing the full CS (blue) enabled section with plenty of activity on DO (yellow) and SK (purple)
 
-![full waveform](pictures/CPU_config_full_waveform.png)
+![full waveform](pictures/CPU_config_full_with_clock.png)
 
-Zooming in on the first burst we can make out the data.  This could be compared with the contents of the ROM.  I didn't have the clock available so I may come back to this
+Checking ModeClock (SK), it should be MasterClock / 256.  I measured SK as being 292KHz which is exactly what we would expect with a MasterClock at 75MHz for 150MHz R4400
 
-![first burst](pictures/CPU_config_burst1_waveform.png)
+![SK freq](pictures/CPU_config_sk_period.png)
 
-Need to check for Reset* and ColdReset* deassertion but I'm not able to find a pinout for the R4400.  According to the R4000 user guide (appendix G.2), the 447pin package for the R4000 lists the following pins.  Perhaps the 447 pin R4400 is the same.  We can use ModeClock, ModeIn to compare
+Zooming in on the first burst we can make out the data.  I cannot seem to correlate the bits seen here with the dump taken earlier. Strangely it seems that the ModeClock speeded up about 100us after CS asserting.  This could have been during the command stage.  I didn't probe the DI or other control pins but may need to do that.
+
+![first burst](pictures/CPU_config_burst1_with_clock.png)
+
+It seems that this pattern repeats every 7ms or so for a total of 29 bursts (about 200ms total).  The docs indicate that 256 bytes should be read before the Reset signals deassert.  The repeat interval is approximately what we would expect 256 bytes to take to be clocked out at 292KHz 
+
+The EEPROM docs state that after 256 bits, if CS continues to be asserted the device will loop back to zero and continue outputting bits from there.
+
+![first two bursts](pictures/CPU_config_burst1_2_with_clock.png)
+
+It's clear that the CPU is not happy with what it is reading.  It seems that CS stays asserted way past 256 bytes being read.  Either the data is garbage, or the CPU is unable to make sense of the data received, or there is a connectivity issue between DO on the EEPROM and ModeIn on the CPU.  That should be the next area to probe
+
+Ultimately, we need to check for Reset* and ColdReset* deassertion but I'm not able to find a pinout for the R4400.  According to the R4000 user guide (appendix G.2), the 447pin package for the R4000 lists the following pins.  Perhaps the 447 pin R4400 is the same.  We can maybe use ModeClock, ModeIn to compare
 
 | Signal | R4000 pin |
 |--------|-----------|
