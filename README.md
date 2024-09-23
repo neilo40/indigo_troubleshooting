@@ -5,7 +5,7 @@ This documents my efforts in troubleshooting the case where my indigo R4k will i
 The boot process is as follows:
  * LED is green on power up
  * CPU starts POST and sets LED to amber and chimes
- * once POST is complete, CPU sets LED back to green and boot commences
+ * once POST is complete (successfully), CPU sets LED back to green and boot commences
 
 If the LED stays green then something is preventing the CPU from executing. Unfortunately there could be a range of reasons for this
 
@@ -38,25 +38,25 @@ This should be enough for the Indigo to get past the POST stage.  By removing as
 Image for reference, with only Bank A populated with SIMMs
 ![R4k CPU board](pictures/CPU_Board.jpeg)
 
-# Steps
+# Troubleshooting Steps
 
 ## Physical inspection
 
 These machines are old and likely have been through multiple owners / configurations.  Check for signs of physical trauma.  Magnifiers / loupe / optical scope will come in handy
  * Check all connectors and sockets for bent / missing / corroded pins
  * Check for damaged / scorched / missing components and replace if possible
-  * One report of expired cap on ZB4 board <link>
-  * I had a missing C502 on the underside of my R4400 CPU module.  I replaced this with a 0.1uF and a 10uF ceramic cap, but neither helped ![C502](pictures/C502.jpeg)
-  * I also had a R4000 CPU module with missing L2 and L5 inductors and damage to the traces.  Seemingly happening after sitting in storage for some time.
+   * One report of expired cap on ZB4 board[^8]
+   * I had a missing C502 on the underside of my R4400 CPU module.  With no idea what value it was, I replaced it with a 0.1uF and a 10uF ceramic cap, but neither helped ![C502](pictures/C502.jpeg)
+   * I also have a R4000 CPU module with missing L2 and L5 inductors and damage to the traces.  Seemingly happening after sitting in storage for some time.
  * Damaged traces - especially around the battery area.  This is soldered to the main board and may have already been replaced (maybe more than once)
  * dry solder joints - look for cracking around connector solder joints
-  * consider reflowing connections if they look suspect
+   * consider reflowing connections if they look suspect
 
 ## Check battery
 
-There has been at least one report of a "dead" indigo due to battery issues.  <link>
+There has been at least one report of a "dead" indigo due to battery issues.[^9]
  * remove battery if installed and try to boot
- * check voltage and replace if low.  Reports that lithium cells (2.5v) work <link>.  Or replace with a new Tadiran (3.6v)
+ * check voltage and replace if low.  Reports that lithium cells (2.5v) work[^10].  Or replace with a new Tadiran (3.6v)
  * re-install and try to boot
 
 ## Physical connections
@@ -68,7 +68,7 @@ Deoxit on all sockets / connectors may be a good idea
  * reseat PROM on CPU board
  * reseat backplane EEPROM (8 pin)
  * reseat 8 pin EEPROM in CPU module (contains clock multiplier info)
- * check reset switch - at least one report of reset switch being permanently closed <link>
+ * check reset switch - at least one report of reset switch being permanently closed[^11]
   * Removing the PSU will be required.  There is one screw at the back and the PSU should slide out with a bit of encouragement. 
  
 ## PSU voltage levels
@@ -129,19 +129,21 @@ This module has some very obvious physical damage.  L2 and L5 are completely mis
 
 #### R4400
 
+This processor runs at 150MHz (75MHz master clock).  It has 16Kb primary (on chip) data and instruction caches and 1Mb secondary (on module) cache
 ![R4400](pictures/r4400.jpeg)
 
 93CS56N - this is the same 2kbit EEPROM as found in the backplane
 
 ![R4400 eeprom](pictures/r4400_eeprom.jpeg)
 
-SGI part? 9113-001 02C3 (found on sticker on top of EEPROM)
-Stores the CPU clock multiplier and other config
+found a sticker on top of EEPROM with "9113-001 02C3".  Can' find any reference to this on the internet
+
+Stores the CPU clock multiplier, cache config and other CPU configurations (see the R4000 user guide)
  * check that it can be read from and written to (make a backup first and write this back to the chip when done) 
 
 I dumped the rom [here](roms/r4400_cpu_module.hex)
 
-content starts with these 8 bytes: `0C 0E CA 21 A0 6A B4 00`.  The rest are all zero apart from two bytes of `FF FF` at addresses 0xAE and 0xAF.
+content starts with these 8 bytes: `0C 0E CA 21 A0 6A B4 00`.  The rest are all zero apart from two bytes of `FF FF` at addresses 0xAE and 0xAF.  The R4000 user guide states that bits 65 to 255 should be zero so this seems wrong.  Should try zeroing these FF FF bytes and see if that helps.
 
 ### PROM EPROM
 
@@ -161,7 +163,7 @@ It can be dumped with `minipro -y --device M27C4002@DIP40 -r prom.hex`
 
 The dump from my machine is [here](roms/prom_070-8116-005.hex)
 A dump found on the internet (I forget where!) is [here](roms/ip20prom.070-8116-005.BE.bin).  
-The files differ <where/why?>
+The files differ.  Need to investigate why
 
 ### Digging deeper into the boot process
 
@@ -197,7 +199,7 @@ Removing the probe causes the green LED to stay on, but reset switch now sets th
 
 Unfortunately picking this up the following day, I was not able to get the chime again.
 
-I captured these waveforms showing the full CS (yellow) enabled section with plenty of activity on DO (blue) and SK (purple)
+I captured these waveforms showing the full CS (yellow) enabled section with plenty of activity on DO (blue) and SK (purple).  SK looks a bit suspect here but it is due to the zoom level.  When zoomed in, the waveform looks fine (see below)
 
 ![full waveform](pictures/CPU_config_full_with_clock.png)
 
@@ -255,3 +257,7 @@ If we can determine that the CPU has initialized correctly, then the next step i
 [^5]: [FM93CS56.pdf](https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/1033/FM93CS56.pdf) or [local_copy](docs/FM93CS56.pdf)
 [^6]: [R4000 User Guide](https://www.eecg.toronto.edu/~moshovos/ACA/R4000.pdf) or [local copy](docs/R4000.pdf).  Section 9.2 page 216
 [^7]: [TC574096D-120](https://www.jameco.com/Jameco/Products/ProdDS/2344607.pdf) or [local copy](docs/2344607.pdf)
+[^8]: [vcfed thread](https://forum.vcfed.org/index.php?threads/recovering-an-sgi-indigo.1246952/)
+[^9]: [Battery replacement guide on forums.sgi.sh](https://forums.sgi.sh/index.php?threads/battery-101-indigo.28/)
+[^10]: [CR2032 thread on irixnet](http://archive.irixnet.org/apocrypha/nekonomicon/forum/3/16726643/1.html)
+[^11]: [comment on sgi.sh thread](https://forums.sgi.sh/index.php?threads/troubleshooting-advice-indigo-r3k-no-chime.1105/post-6576)
